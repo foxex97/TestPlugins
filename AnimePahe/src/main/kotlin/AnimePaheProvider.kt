@@ -87,8 +87,6 @@ class AnimePaheProvider : MainAPI() {
         val plot   = doc.selectFirst("div.desc, .entry-content p, p.plot")?.text()
         val year   = doc.selectFirst("span.year, .year a")?.text()?.toIntOrNull()
         val tags   = doc.select("span.genre a, .genres a").map { it.text() }
-        val rating = doc.selectFirst("span.imdb")?.text()
-            ?.replace("IMDb:", "")?.trim()?.toRatingInt()
 
         return if (isTv) {
             val episodes = mutableListOf<Episode>()
@@ -117,7 +115,6 @@ class AnimePaheProvider : MainAPI() {
                 this.plot      = plot
                 this.year      = year
                 this.tags      = tags
-                this.rating    = rating
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, url) {
@@ -125,7 +122,6 @@ class AnimePaheProvider : MainAPI() {
                 this.plot      = plot
                 this.year      = year
                 this.tags      = tags
-                this.rating    = rating
             }
         }
     }
