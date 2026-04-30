@@ -1,11 +1,11 @@
-package com.x12.
+package com.x12
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import org.jsoup.nodes.Element
-import org.jsoup.nodes.Document
+import java.net.URLEncoder
 
 // ─── DATA CLASSES ───────────────────────────────────────────────────────────
 
@@ -103,7 +103,7 @@ class AnimePaheProvider : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val response = app.get(
-            "$mainUrl/api?m=search&q=${java.net.URLEncoder.encode(query, "UTF-8")}"
+            "$mainUrl/api?m=search&q=${URLEncoder.encode(query, "UTF-8")}"
         ).parsedSafe<PaheSearchResponse>()
 
         return response?.data?.map { it.toSearchResult() } ?: emptyList()
