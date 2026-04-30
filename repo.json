@@ -1,0 +1,9 @@
+{
+  "name": "AnimePahe",
+  "description": "AnimePahe Anime Streaming",
+  "iconUrl": "https://animepahe.pw/favicon.ico",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/foxex97/TestPlugins/builds/plugins.json"
+  ]
+}

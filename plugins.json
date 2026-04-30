@@ -1,0 +1,23 @@
+[
+    {
+        "iconUrl": "https://ww192.pencurimoviesubmalay.motorcycles/wp-content/uploads/2025/02/imageedit_2_4342265343.png",
+        "fileHash": "sha256-c87045a00a53a1c8ada9e3e340882ef96fae4a99c0c2dd6851abad725843509c",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/foxex97/TestPlugins",
+        "fileSize": 12818,
+        "status": 1,
+        "language": "ms",
+        "authors": [
+            "YourName"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AnimePahe",
+        "description": "Pencuri Movie Sub Malay - Filem & Drama dengan Sarikata Bahasa Melayu",
+        "url": "https://raw.githubusercontent.com/foxex97/TestPlugins/builds/AnimePahe.cs3",
+        "name": "AnimePahe"
+    }
+]
