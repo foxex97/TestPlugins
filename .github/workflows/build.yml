@@ -44,20 +44,21 @@ jobs:
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
           ./gradlew make makePluginsJson
-          cp **/build/*.cs3 $GITHUB_WORKSPACE/builds
-          cp build/plugins.json $GITHUB_WORKSPACE/builds
+          echo "=== Searching for .cs3 files ==="
+          find . -name "*.cs3"
+          echo "=== Searching for plugins.json ==="
+          find . -name "plugins.json"
+          echo "=== Copying files ==="
+          find . -name "*.cs3" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
+          find . -name "plugins.json" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
+          echo "=== Builds folder contents ==="
+          ls -la $GITHUB_WORKSPACE/builds/
 
-     name: Build Plugins
-  run: |
-    cd $GITHUB_WORKSPACE/src
-    chmod +x gradlew
-    ./gradlew make makePluginsJson
-    echo "=== Searching for .cs3 files ==="
-    find . -name "*.cs3"
-    echo "=== Searching for plugins.json ==="
-    find . -name "plugins.json"
-    echo "=== Copying files ==="
-    find . -name "*.cs3" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
-    find . -name "plugins.json" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
-    echo "=== Builds folder contents ==="
-    ls -la $GITHUB_WORKSPACE/builds/
+      - name: Push builds
+        run: |
+          cd $GITHUB_WORKSPACE/builds
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .
+          git commit --amend -m "Build $GITHUB_SHA" || exit 0
+          git push --force origin builds
