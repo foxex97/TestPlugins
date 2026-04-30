@@ -1,11 +1,13 @@
-package com.x12
+package com.x12.
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.Document
 
-// ─── DATA CLASSES (renamed to avoid conflicts) ──────────────────────────────
+// ─── DATA CLASSES ───────────────────────────────────────────────────────────
 
 data class PaheSearchResponse(
     val data: List<PaheSearchItem>? = null
@@ -99,7 +101,7 @@ class AnimePaheProvider : MainAPI() {
 
     // ─── SEARCH ─────────────────────────────────────────────────────────────
 
-    override suspend fun search(query: String): List<com.lagradost.cloudstream3.SearchResponse> {
+    override suspend fun search(query: String): List<SearchResponse> {
         val response = app.get(
             "$mainUrl/api?m=search&q=${java.net.URLEncoder.encode(query, "UTF-8")}"
         ).parsedSafe<PaheSearchResponse>()
@@ -110,18 +112,18 @@ class AnimePaheProvider : MainAPI() {
     // ─── LOAD ────────────────────────────────────────────────────────────────
 
     override suspend fun load(url: String): LoadResponse {
-        val session  = url.substringAfterLast("/anime/")
-        val doc      = app.get(url).document
+        val session = url.substringAfterLast("/anime/")
+        val doc     = app.get(url).document
 
-        val title    = doc.selectFirst("h1.title-name")?.text()
+        val title   = doc.selectFirst("h1.title-name")?.text()
             ?: doc.selectFirst(".anime-title")?.text()
             ?: "Unknown"
-        val poster   = doc.selectFirst(".anime-poster img")?.attr("data-src")
+        val poster  = doc.selectFirst(".anime-poster img")?.attr("data-src")
             ?: doc.selectFirst(".anime-poster img")?.attr("src")
-        val plot     = doc.selectFirst(".anime-synopsis")?.text()
-        val year     = doc.selectFirst(".anime-aired")?.text()
+        val plot    = doc.selectFirst(".anime-synopsis")?.text()
+        val year    = doc.selectFirst(".anime-aired")?.text()
             ?.let { Regex("\\d{4}").find(it)?.value?.toIntOrNull() }
-        val tags     = doc.select(".anime-genre a").map { it.text() }
+        val tags    = doc.select(".anime-genre a").map { it.text() }
 
         val episodes = mutableListOf<Episode>()
         var page     = 1
@@ -170,14 +172,15 @@ class AnimePaheProvider : MainAPI() {
         val playUrl  = "$mainUrl/play/$animeSession/$epSession"
         val document = app.get(playUrl).document
 
-        document.select("div#resolutionMenu button").forEach { button ->
+        // Find all Kwik links from the resolution buttons
+        document.select("div#resolutionMenu button").forEach { button: Element ->
             val kwikUrl = button.attr("data-src")
             if (kwikUrl.isNotBlank()) {
                 loadExtractor(kwikUrl, playUrl, subtitleCallback, callback)
             }
         }
 
-        document.select("a.dropdown-item[data-src]").forEach { a ->
+        document.select("a.dropdown-item[data-src]").forEach { a: Element ->
             val kwikUrl = a.attr("data-src")
             if (kwikUrl.isNotBlank()) {
                 loadExtractor(kwikUrl, playUrl, subtitleCallback, callback)
