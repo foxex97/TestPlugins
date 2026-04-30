@@ -5,13 +5,10 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
 
 // ─── DATA CLASSES ───────────────────────────────────────────────────────────
 
-data class PaheSearchResponse(
-    val data: List<PaheSearchItem>? = null
-)
+data class PaheSearchResponse(val data: List<PaheSearchItem>? = null)
 
 data class PaheSearchItem(
     val id: Int? = null,
@@ -44,7 +41,7 @@ data class PaheEpisodeItem(
     val filler: Int? = null
 )
 
-// ─── MAIN PROVIDER ──────────────────────────────────────────────────────────
+// ─── PROVIDER ───────────────────────────────────────────────────────────────
 
 class AnimePaheProvider : MainAPI() {
 
@@ -59,12 +56,21 @@ class AnimePaheProvider : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = false
 
+    // Cloudflare bypass headers
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept" to "application/json, text/plain, */*",
+        "Accept-Language" to "en-US,en;q=0.9",
+        "Referer" to "https://animepahe.pw/",
+        "X-Requested-With" to "XMLHttpRequest"
+    )
+
     private fun getType(t: String): TvType {
         return when (t.lowercase()) {
-            "movie"            -> TvType.AnimeMovie
+            "movie"           -> TvType.AnimeMovie
             "ova", "ona",
-            "special"          -> TvType.OVA
-            else               -> TvType.Anime
+            "special"         -> TvType.OVA
+            else              -> TvType.Anime
         }
     }
 
@@ -92,9 +98,9 @@ class AnimePaheProvider : MainAPI() {
         request: MainPageRequest
     ): HomePageResponse {
         val response = app.get(
-            "$mainUrl/api?m=${request.data}&page=$page"
+            "$mainUrl/api?m=${request.data}&page=$page",
+            headers = headers
         ).parsedSafe<PaheSearchResponse>()
-
         val results = response?.data?.map { it.toSearchResult() } ?: emptyList()
         return newHomePageResponse(request.name, results)
     }
@@ -103,43 +109,46 @@ class AnimePaheProvider : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val response = app.get(
-            "$mainUrl/api?m=search&q=${URLEncoder.encode(query, "UTF-8")}"
+            "$mainUrl/api?m=search&q=${java.net.URLEncoder.encode(query, "UTF-8")}",
+            headers = headers
         ).parsedSafe<PaheSearchResponse>()
-
         return response?.data?.map { it.toSearchResult() } ?: emptyList()
     }
 
     // ─── LOAD ────────────────────────────────────────────────────────────────
 
     override suspend fun load(url: String): LoadResponse {
-        val session = url.substringAfterLast("/anime/")
-        val doc     = app.get(url).document
+        val session  = url.substringAfterLast("/anime/")
+        val doc      = app.get(url, headers = headers).document
 
-        val title   = doc.selectFirst("h1.title-name")?.text()
+        val title    = doc.selectFirst("h1.title-name")?.text()
             ?: doc.selectFirst(".anime-title")?.text()
             ?: "Unknown"
-        val poster  = doc.selectFirst(".anime-poster img")?.attr("data-src")
+        val poster   = doc.selectFirst(".anime-poster a")?.attr("href")
+            ?: doc.selectFirst(".anime-poster img")?.attr("data-src")
             ?: doc.selectFirst(".anime-poster img")?.attr("src")
-        val plot    = doc.selectFirst(".anime-synopsis")?.text()
-        val year    = doc.selectFirst(".anime-aired")?.text()
+        val plot     = doc.selectFirst(".anime-synopsis p")?.text()
+            ?: doc.selectFirst(".anime-synopsis")?.text()
+        val year     = doc.selectFirst(".anime-aired")?.text()
             ?.let { Regex("\\d{4}").find(it)?.value?.toIntOrNull() }
-        val tags    = doc.select(".anime-genre a").map { it.text() }
+        val tags     = doc.select(".anime-genre ul li a").map { it.text() }
 
+        // Fetch all episodes across pages
         val episodes = mutableListOf<Episode>()
         var page     = 1
         var lastPage = 1
 
         do {
             val epList = app.get(
-                "$mainUrl/api?m=release&id=$session&sort=episode_asc&page=$page"
+                "$mainUrl/api?m=release&id=$session&sort=episode_asc&page=$page",
+                headers = headers
             ).parsedSafe<PaheEpisodeList>()
 
             lastPage = epList?.last_page ?: 1
-
             epList?.data?.forEach { ep ->
                 episodes.add(
                     newEpisode(Pair(session, ep.session).toJson()) {
-                        this.name      = ep.title ?: "Episode ${ep.episode?.toInt()}"
+                        this.name      = ep.title?.ifBlank { null } ?: "Episode ${ep.episode?.toInt()}"
                         this.episode   = ep.episode?.toInt()
                         this.posterUrl = ep.snapshot
                     }
@@ -170,18 +179,20 @@ class AnimePaheProvider : MainAPI() {
         val epSession    = parsed.second
 
         val playUrl  = "$mainUrl/play/$animeSession/$epSession"
-        val document = app.get(playUrl).document
+        val document = app.get(playUrl, headers = headers).document
 
-        // Find all Kwik links from the resolution buttons
-        document.select("div#resolutionMenu button").forEach { button: Element ->
-            val kwikUrl = button.attr("data-src")
-            if (kwikUrl.isNotBlank()) {
+        // AnimePahe lists all quality options as <a> buttons
+        // Each one links to a Kwik embed URL
+        document.select("div#pickfornow a").forEach { a: Element ->
+            val kwikUrl = a.attr("href")
+            if (kwikUrl.contains("kwik")) {
                 loadExtractor(kwikUrl, playUrl, subtitleCallback, callback)
             }
         }
 
-        document.select("a.dropdown-item[data-src]").forEach { a: Element ->
-            val kwikUrl = a.attr("data-src")
+        // Fallback selector
+        document.select("a[href*=kwik]").forEach { a: Element ->
+            val kwikUrl = a.attr("href")
             if (kwikUrl.isNotBlank()) {
                 loadExtractor(kwikUrl, playUrl, subtitleCallback, callback)
             }
