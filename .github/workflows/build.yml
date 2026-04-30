@@ -43,7 +43,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew make makePluginsJson
+          ./gradlew make makePluginsJson --stacktrace 2>&1 | head -100
           echo "=== Searching for .cs3 files ==="
           find . -name "*.cs3"
           echo "=== Searching for plugins.json ==="
