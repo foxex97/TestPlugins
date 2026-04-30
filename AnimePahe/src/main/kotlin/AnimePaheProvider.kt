@@ -2,167 +2,131 @@ package com.x12
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
-import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import org.jsoup.nodes.Element
-
-// ─── DATA CLASSES ───────────────────────────────────────────────────────────
-
-data class PaheSearchResponse(val data: List<PaheSearchItem>? = null)
-
-data class PaheSearchItem(
-    val id: Int? = null,
-    val title: String = "",
-    val type: String = "TV",
-    val episodes: Int? = null,
-    val status: String? = null,
-    val season: String? = null,
-    val year: Int? = null,
-    val score: Double? = null,
-    val poster: String? = null,
-    val session: String = ""
-)
-
-data class PaheEpisodeList(
-    val total: Int? = null,
-    val data: List<PaheEpisodeItem>? = null,
-    val current_page: Int? = null,
-    val last_page: Int? = null
-)
-
-data class PaheEpisodeItem(
-    val id: Int? = null,
-    val anime_id: Int? = null,
-    val episode: Double? = null,
-    val title: String? = null,
-    val snapshot: String? = null,
-    val duration: String? = null,
-    val session: String = "",
-    val filler: Int? = null
-)
-
-// ─── PROVIDER ───────────────────────────────────────────────────────────────
 
 class AnimePaheProvider : MainAPI() {
 
-    override var mainUrl = "https://animepahe.pw"
-    override var name = "AnimePahe"
+    override var mainUrl = "https://ww192.pencurimoviesubmalay.motorcycles"
+    override var name = "PencuriMovie"
     override val supportedTypes = setOf(
-        TvType.Anime,
-        TvType.AnimeMovie,
-        TvType.OVA
+        TvType.Movie,
+        TvType.TvSeries
     )
-    override var lang = "en"
+    override var lang = "ms"
     override val hasMainPage = true
     override val hasQuickSearch = false
 
-    // Cloudflare bypass headers
-    private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept" to "application/json, text/plain, */*",
-        "Accept-Language" to "en-US,en;q=0.9",
-        "Referer" to "https://animepahe.pw/",
-        "X-Requested-With" to "XMLHttpRequest"
-    )
+    private fun Element.toSearchResult(): SearchResponse? {
+        val anchor = this.selectFirst("a") ?: return null
+        val url    = anchor.attr("href") ?: return null
+        val title  = anchor.attr("title")
+            ?: this.selectFirst("h3")?.text()
+            ?: return null
+        val poster = this.selectFirst("img")?.attr("src")
+            ?: this.selectFirst("img")?.attr("data-src")
 
-    private fun getType(t: String): TvType {
-        return when (t.lowercase()) {
-            "movie"           -> TvType.AnimeMovie
-            "ova", "ona",
-            "special"         -> TvType.OVA
-            else              -> TvType.Anime
-        }
-    }
-
-    private fun PaheSearchItem.toSearchResult(): AnimeSearchResponse {
-        return newAnimeSearchResponse(
-            title,
-            "$mainUrl/anime/$session",
-            getType(type)
-        ) {
-            this.posterUrl = poster
+        return if (url.contains("/tvshows/")) {
+            newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
+                this.posterUrl = poster
+            }
+        } else {
+            newMovieSearchResponse(title, url, TvType.Movie) {
+                this.posterUrl = poster
+            }
         }
     }
 
     // ─── HOME PAGE ──────────────────────────────────────────────────────────
 
     override val mainPage = mainPageOf(
-        "airing"   to "Currently Airing",
-        "upcoming" to "Upcoming",
-        "tv"       to "TV Series",
-        "movie"    to "Movies"
+        "$mainUrl/movies/"               to "Movies Terbaru",
+        "$mainUrl/tvshows/"              to "TV Shows Terbaru",
+        "$mainUrl/group_movie/malaysub/" to "MalaySub Movies",
+        "$mainUrl/group_movie/english/"  to "English Movies",
+        "$mainUrl/group_movie/korean/"   to "Korean Movies",
+        "$mainUrl/group_tv/korean/"      to "Korean Drama",
+        "$mainUrl/group_tv/english/"     to "English Series",
+        "$mainUrl/release/2025/"         to "2025 Releases"
     )
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val response = app.get(
-            "$mainUrl/api?m=${request.data}&page=$page",
-            headers = headers
-        ).parsedSafe<PaheSearchResponse>()
-        val results = response?.data?.map { it.toSearchResult() } ?: emptyList()
+        val url = if (page == 1) request.data
+        else "${request.data}?page=$page"
+
+        val doc     = app.get(url).document
+        val results = doc.select("div.ml-item, article.item, div.item")
+            .mapNotNull { it.toSearchResult() }
+
         return newHomePageResponse(request.name, results)
     }
 
     // ─── SEARCH ─────────────────────────────────────────────────────────────
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val response = app.get(
-            "$mainUrl/api?m=search&q=${java.net.URLEncoder.encode(query, "UTF-8")}",
-            headers = headers
-        ).parsedSafe<PaheSearchResponse>()
-        return response?.data?.map { it.toSearchResult() } ?: emptyList()
+        val doc = app.get(
+            "$mainUrl/?s=${java.net.URLEncoder.encode(query, "UTF-8")}"
+        ).document
+
+        return doc.select("div.ml-item, article.item, div.item")
+            .mapNotNull { it.toSearchResult() }
     }
 
     // ─── LOAD ────────────────────────────────────────────────────────────────
 
     override suspend fun load(url: String): LoadResponse {
-        val session  = url.substringAfterLast("/anime/")
-        val doc      = app.get(url, headers = headers).document
+        val doc   = app.get(url).document
+        val isTv  = url.contains("/tvshows/")
 
-        val title    = doc.selectFirst("h1.title-name")?.text()
-            ?: doc.selectFirst(".anime-title")?.text()
+        val title  = doc.selectFirst("h3.movieTitle, h1, .entry-title")?.text()
             ?: "Unknown"
-        val poster   = doc.selectFirst(".anime-poster a")?.attr("href")
-            ?: doc.selectFirst(".anime-poster img")?.attr("data-src")
-            ?: doc.selectFirst(".anime-poster img")?.attr("src")
-        val plot     = doc.selectFirst(".anime-synopsis p")?.text()
-            ?: doc.selectFirst(".anime-synopsis")?.text()
-        val year     = doc.selectFirst(".anime-aired")?.text()
-            ?.let { Regex("\\d{4}").find(it)?.value?.toIntOrNull() }
-        val tags     = doc.select(".anime-genre ul li a").map { it.text() }
+        val poster = doc.selectFirst("div.movieImgs img, .poster img")?.attr("src")
+            ?: doc.selectFirst("img.img-responsive")?.attr("src")
+        val plot   = doc.selectFirst("div.desc, .entry-content p, p.plot")?.text()
+        val year   = doc.selectFirst("span.year, .year a")?.text()?.toIntOrNull()
+        val tags   = doc.select("span.genre a, .genres a").map { it.text() }
+        val rating = doc.selectFirst("span.imdb")?.text()
+            ?.replace("IMDb:", "")?.trim()?.toRatingInt()
 
-        // Fetch all episodes across pages
-        val episodes = mutableListOf<Episode>()
-        var page     = 1
-        var lastPage = 1
+        return if (isTv) {
+            val episodes = mutableListOf<Episode>()
 
-        do {
-            val epList = app.get(
-                "$mainUrl/api?m=release&id=$session&sort=episode_asc&page=$page",
-                headers = headers
-            ).parsedSafe<PaheEpisodeList>()
+            doc.select("div.episodios li, .episodio, ul.episodios li").forEach { li ->
+                val epLink  = li.selectFirst("a")?.attr("href") ?: return@forEach
+                val epTitle = li.selectFirst("a")?.text() ?: ""
+                val epNum   = Regex("(\\d+)").find(epTitle)?.value?.toIntOrNull()
+                val epThumb = li.selectFirst("img")?.attr("src")
 
-            lastPage = epList?.last_page ?: 1
-            epList?.data?.forEach { ep ->
-                episodes.add(
-                    newEpisode(Pair(session, ep.session).toJson()) {
-                        this.name      = ep.title?.ifBlank { null } ?: "Episode ${ep.episode?.toInt()}"
-                        this.episode   = ep.episode?.toInt()
-                        this.posterUrl = ep.snapshot
-                    }
-                )
+                episodes.add(newEpisode(epLink) {
+                    this.name      = epTitle
+                    this.episode   = epNum
+                    this.posterUrl = epThumb
+                })
             }
-            page++
-        } while (page <= lastPage)
 
-        return newAnimeLoadResponse(title, url, TvType.Anime) {
-            this.posterUrl = poster
-            this.plot      = plot
-            this.year      = year
-            this.tags      = tags
-            addEpisodes(DubStatus.Subbed, episodes)
+            if (episodes.isEmpty()) {
+                episodes.add(newEpisode(url) {
+                    this.name = title
+                })
+            }
+
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
+                this.plot      = plot
+                this.year      = year
+                this.tags      = tags
+                this.rating    = rating
+            }
+        } else {
+            newMovieLoadResponse(title, url, TvType.Movie, url) {
+                this.posterUrl = poster
+                this.plot      = plot
+                this.year      = year
+                this.tags      = tags
+                this.rating    = rating
+            }
         }
     }
 
@@ -174,27 +138,23 @@ class AnimePaheProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val parsed       = parseJson<Pair<String, String>>(data)
-        val animeSession = parsed.first
-        val epSession    = parsed.second
+        val doc = app.get(data).document
 
-        val playUrl  = "$mainUrl/play/$animeSession/$epSession"
-        val document = app.get(playUrl, headers = headers).document
-
-        // AnimePahe lists all quality options as <a> buttons
-        // Each one links to a Kwik embed URL
-        document.select("div#pickfornow a").forEach { a: Element ->
-            val kwikUrl = a.attr("href")
-            if (kwikUrl.contains("kwik")) {
-                loadExtractor(kwikUrl, playUrl, subtitleCallback, callback)
+        doc.select("ul.server-list li, div.server-list a, .tabcontent iframe").forEach { el ->
+            val src = when {
+                el.tagName() == "iframe" -> el.attr("src")
+                el.tagName() == "a"      -> el.attr("href")
+                else -> el.selectFirst("a")?.attr("href") ?: ""
+            }
+            if (src.isNotBlank() && src.startsWith("http")) {
+                loadExtractor(src, data, subtitleCallback, callback)
             }
         }
 
-        // Fallback selector
-        document.select("a[href*=kwik]").forEach { a: Element ->
-            val kwikUrl = a.attr("href")
-            if (kwikUrl.isNotBlank()) {
-                loadExtractor(kwikUrl, playUrl, subtitleCallback, callback)
+        doc.select("a.mvi-cover, a[href*='esuhandout'], a[href*='embed']").forEach { a ->
+            val src = a.attr("href")
+            if (src.isNotBlank()) {
+                loadExtractor(src, data, subtitleCallback, callback)
             }
         }
 

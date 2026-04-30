@@ -1,20 +1,10 @@
 version = 1
 
 cloudstream {
-    language = "en"
-    // Plugin info shown in the app
-    description = "AnimePahe - Anime streaming"
+    language = "ms"
+    description = "Pencuri Movie Sub Malay - Filem & Drama dengan Sarikata Bahasa Melayu"
     authors = listOf("YourName")
-
-    /**
-     * Status of the plugin:
-     * 0: Down
-     * 1: Ok
-     * 2: Slow
-     * 3: Beta only
-     **/
     status = 1
-    tvTypes = listOf("Anime", "AnimeMovie", "OVA")
-
-    iconUrl = "https://animepahe.pw/favicon.ico"
+    tvTypes = listOf("Movie", "TvSeries")
+    iconUrl = "https://ww192.pencurimoviesubmalay.motorcycles/wp-content/uploads/2025/02/imageedit_2_4342265343.png"
 }
