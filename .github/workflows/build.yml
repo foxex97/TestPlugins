@@ -43,16 +43,18 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew make makePluginsJson --stacktrace 2>&1 | head -100
-          echo "=== Searching for .cs3 files ==="
-          find . -name "*.cs3"
-          echo "=== Searching for plugins.json ==="
-          find . -name "plugins.json"
-          echo "=== Copying files ==="
+          ./gradlew make makePluginsJson
           find . -name "*.cs3" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
           find . -name "plugins.json" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
-          echo "=== Builds folder contents ==="
-          ls -la $GITHUB_WORKSPACE/builds/
+          echo '{
+            "name": "AnimePahe",
+            "description": "AnimePahe Anime Streaming",
+            "iconUrl": "https://animepahe.pw/favicon.ico",
+            "manifestVersion": 1,
+            "pluginLists": [
+              "https://raw.githubusercontent.com/foxex97/TestPlugins/builds/plugins.json"
+            ]
+          }' > $GITHUB_WORKSPACE/builds/repo.json
 
       - name: Push builds
         run: |
